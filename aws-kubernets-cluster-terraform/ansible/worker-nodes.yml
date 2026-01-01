@@ -1,0 +1,31 @@
+---
+- name: Join Worker Nodes to Kubernetes Cluster
+  hosts: worker_nodes
+  become: yes
+  tasks:
+    - name: Check if node is already part of cluster
+      stat:
+        path: /etc/kubernetes/kubelet.conf
+      register: node_joined
+
+    - name: Copy join command from local file
+      copy:
+        src: ./join-command.sh
+        dest: /tmp/join-command.sh
+        mode: '0755'
+      when: not node_joined.stat.exists
+
+    - name: Join the cluster
+      shell: bash /tmp/join-command.sh
+      when: not node_joined.stat.exists
+      register: join_result
+
+    - name: Display join result
+      debug:
+        msg: "{{ join_result.stdout_lines }}"
+      when: not node_joined.stat.exists
+
+    - name: Clean up join command file
+      file:
+        path: /tmp/join-command.sh
+        state: absent
