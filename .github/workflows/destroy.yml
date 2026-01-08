@@ -20,7 +20,7 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: ./learntfdoc
+        working-directory: ./github-action
     
     steps:
     # Checkout the repository
@@ -50,7 +50,11 @@ jobs:
     
     # Initialize Terraform
     - name: Terraform Init
-      run: terraform init
+      run: |
+        terraform init \
+        -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+        -backend-config="key=${{ secrets.TF_STATE_KEY }}" \
+        -backend-config="region=${{ vars.AWS_REGION }}"
     
     # Show what will be destroyed
     - name: Terraform Plan Destroy

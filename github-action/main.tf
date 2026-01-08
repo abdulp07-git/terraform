@@ -7,6 +7,14 @@ terraform {
       version = "6.27.0"
     }
   }
+
+  backend "s3" {
+    bucket         = "abd-tfstate"
+    key            = "github-action/terraform.tfstate"
+    region         = "ap-south-1"
+    encrypt        = true
+    dynamodb_table = "terraform-state-lock"
+  }
 }
 
 provider "aws" {
