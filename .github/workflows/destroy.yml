@@ -1,57 +1,61 @@
-name: 'Destroy'
+name: 'Terraform Destroy'
 
-# on:
-#   push:
-#     branches: [ "master" ]
-#   pull_request:
-
-# manual run
 on:
-  workflow_dispatch:
+  workflow_dispatch:  # Manual trigger only
+    inputs:
+      confirm:
+        description: 'Type "destroy" to confirm'
+        required: true
+        default: ''
 
 permissions:
   contents: read
 
 jobs:
-  terraform:
-    name: 'Terraform'
+  terraform-destroy:
+    name: 'Terraform Destroy'
     runs-on: ubuntu-latest
-    environment: production
+    environment: production  # This adds approval gate if configured
     
     defaults:
       run:
         shell: bash
-        working-directory: ./learntfdoc  # Point to your subdirectory
+        working-directory: ./learntfdoc
     
     steps:
-    # Checkout the repository to the GitHub Actions runner
+    # Checkout the repository
     - name: Checkout
       uses: actions/checkout@v4
     
-    # Configure AWS Credentials using secrets
+    # Verify confirmation input
+    - name: Verify Destruction Confirmation
+      run: |
+        if [ "${{ github.event.inputs.confirm }}" != "destroy" ]; then
+          echo "❌ Destruction cancelled. You must type 'destroy' to confirm."
+          exit 1
+        fi
+        echo "✅ Confirmation verified. Proceeding with destroy..."
+    
+    # Configure AWS Credentials
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ vars.AWS_REGION }}  # or use: us-east-1
+        aws-region: ${{ secrets.AWS_REGION }}
     
-    # Install the latest version of Terraform CLI
+    # Install Terraform
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
     
-    # Initialize a new or existing Terraform working directory
+    # Initialize Terraform
     - name: Terraform Init
       run: terraform init
     
-    # Checks that all Terraform configuration files adhere to a canonical format
-    - name: Terraform Format
-      run: terraform fmt -check
+    # Show what will be destroyed
+    - name: Terraform Plan Destroy
+      run: terraform plan -destroy -input=false
     
-    # Generates an execution plan for Terraform
-    - name: Terraform Plan
-      run: terraform plan -input=false
-    
-    # On push to "master", build or change infrastructure according to Terraform configuration files
-    - name: Terraform Apply
+    # Destroy infrastructure
+    - name: Terraform Destroy
       run: terraform destroy -auto-approve -input=false
