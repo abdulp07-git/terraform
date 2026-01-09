@@ -1,0 +1,106 @@
+name: 'Terraform with Approval'
+
+# on:
+#   push:
+#     branches: [ "master" ]
+#   pull_request:
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write  # If using OIDC
+
+jobs:
+  # Job 1: Plan (runs on every PR and push)
+  terraform-plan:
+    name: 'Terraform Plan'
+    runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        shell: bash
+        working-directory: ./learntfdoc
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        # aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        # aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        # aws-region: ${{ secrets.AWS_REGION }}
+        role-to-assume: arn:aws:iam::021891584638:role/GitHubActionsRole  # ← Your ARN here
+        aws-region: ${{ vars.AWS_REGION }}
+    
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+    
+    - name: Terraform Init
+      run: terraform init
+    
+    - name: Terraform Format
+      run: terraform fmt -check
+    
+    - name: Terraform Plan
+      run: terraform plan -input=false -out=tfplan
+    
+    # Save plan for apply job
+    - name: Upload Plan Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: terraform-plan
+        path: learntfdoc/tfplan
+        retention-days: 5
+  
+  # Job 2: Apply (only runs on push to master, requires approval)
+  terraform-apply:
+    name: 'Terraform Apply'
+    needs: terraform-plan  # Wait for plan to complete
+    runs-on: ubuntu-latest
+    
+    # THIS IS THE KEY: Environment with approval
+    environment:
+      name: production
+      url: https://console.aws.amazon.com  # Optional: link to AWS console
+    
+    # Only run on push to master (not on PRs)
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    
+    defaults:
+      run:
+        shell: bash
+        working-directory: ./learntfdoc
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        # aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        # aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        # aws-region: ${{ secrets.AWS_REGION }}
+        role-to-assume: arn:aws:iam::021891584638:role/GitHubActionsRole  # ← Your ARN here
+        aws-region: ${{ vars.AWS_REGION }}
+    
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+    
+    - name: Terraform Init
+      run: terraform init
+    
+    # Download the plan from previous job
+    - name: Download Plan Artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: terraform-plan
+        path: learntfdoc/
+    
+    # Apply the plan
+    - name: Terraform Apply
+      run: terraform apply -input=false tfplan
